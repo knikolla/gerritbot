@@ -62,6 +62,7 @@ import os
 import re
 import ssl
 import sys
+import requests
 import threading
 import time
 import yaml
@@ -152,6 +153,46 @@ class GerritBot(irc.bot.SingleServerIRCBot):
         except Exception:
             self.log.exception('Exception sending message:')
             self.connection.reconnect()
+
+
+class SlackBot(object):
+    def __init__(self, url):
+        self.url = url
+
+    def start(self):
+        pass
+
+    def send(self, channel, msg):
+        requests.post(self.url,
+                      body={'text': msg},
+                      headers={'Content-Type': 'application/json'})
+
+
+class ReadTheBot(object):
+    def __init__(self, url, token):
+        self.url = url
+        self.token = token
+
+    def start(self):
+        pass
+
+    def send(self, channel, msg):
+        if msg.startswith('Merged '):
+            requests.post(self.url,
+                          body={'token': self.token},
+                          headers={'Content-Type': 'application/json'})
+
+
+class GregBot(object):
+    def __init__(self, bots):
+        self.bots = bots[:]
+
+    def start(self):
+        pass
+
+    def send(self, channel, msg):
+        for bot in self.bots:
+            bot.send(channel, msg)
 
 
 class Gerrit(threading.Thread):
@@ -405,13 +446,21 @@ def _main(config):
         log.exception("Syntax error in chanel config file")
         raise
 
-    bot = GerritBot(channel_config.channels,
-                    config.get('ircbot', 'nick'),
-                    config.get('ircbot', 'pass'),
-                    config.get('ircbot', 'server'),
-                    config.getint('ircbot', 'port'),
-                    config.getboolean('ircbot', 'force_ssl'),
-                    config.get('ircbot', 'server_password'))
+    bots = [
+        SlackBot(config.get('slack', 'url')),
+        ReadTheBot(config.get('rtd', 'url'),
+                   config.get('rtd', 'token'))
+    ]
+    bot = GregBot(bots)
+
+    # bot = GerritBot(channel_config.channels,
+    #                 config.get('ircbot', 'nick'),
+    #                 config.get('ircbot', 'pass'),
+    #                 config.get('ircbot', 'server'),
+    #                 config.getint('ircbot', 'port'),
+    #                 config.getboolean('ircbot', 'force_ssl'),
+    #                 config.get('ircbot', 'server_password'))
+
     if config.has_option('ircbot', 'use_mqtt'):
         use_mqtt = config.getboolean('ircbot', 'use_mqtt')
     else:
@@ -450,9 +499,10 @@ def main():
     else:
         pid_path = "/var/run/gerritbot/gerritbot.pid"
 
-    pid = pid_file_module.TimeoutPIDLockFile(pid_path, 10)
-    with daemon.DaemonContext(pidfile=pid):
-        _main(config)
+    _main(config)
+    #pid = pid_file_module.TimeoutPIDLockFile(pid_path, 10)
+    #with daemon.DaemonContext(pidfile=pid):
+    #    _main(config)
 
 
 def setup_logging(config):

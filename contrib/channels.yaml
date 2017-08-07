@@ -1,0 +1,8 @@
+mixmatch:
+    events:
+      - patchset-created
+      - change-merged
+    projects:
+      - openstack/mixmatch
+    branches:
+      - master
